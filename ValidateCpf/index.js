@@ -1,35 +1,34 @@
-const sanitize = s => (s||"").toString().replace(/\D/g,'');
-
-function calculaDigito(cpfArr, fator) {
-  let total = 0;
-  for (let i = 0; i < cpfArr.length; i++) {
-    total += cpfArr[i] * (fator--);
-  }
-  const resto = total % 11;
-  return resto < 2 ? 0 : 11 - resto;
-}
-
-function validaCPF(cpf) {
-  cpf = sanitize(cpf);
-  if (cpf.length !== 11) return false;
-  if (/^(\d)\1+$/.test(cpf)) return false;
-  const nums = cpf.split('').map(Number);
-  const dig1 = calculaDigito(nums.slice(0,9), 10);
-  const dig2 = calculaDigito(nums.slice(0,10), 11);
-  return dig1 === nums[9] && dig2 === nums[10];
-}
-
 module.exports = async function (context, req) {
-  try {
-    const cpf = req.body?.cpf ?? req.query?.cpf;
+    const cpf = req.query.cpf || (req.body && req.body.cpf);
+
     if (!cpf) {
-      context.res = { status: 400, body: { ok:false, message: "Informe 'cpf' no body ou query" } };
-      return;
+        context.res = {
+            status: 400,
+            body: "Por favor, informe um CPF."
+        };
+        return;
     }
-    const ok = validaCPF(cpf);
-    context.res = { status: 200, body: { ok, normalized: sanitize(cpf) } };
-  } catch (err) {
-    context.log.error(err);
-    context.res = { status: 500, body: { ok:false, error: "erro interno" } };
-  }
+
+    const isValid = validateCPF(cpf);
+    context.res = {
+        status: 200,
+        body: { cpf, valido: isValid }
+    };
 };
+
+function validateCPF(cpf) {
+    cpf = cpf.replace(/[^\d]+/g, '');
+    if (cpf.length !== 11 || /^(\d)\1+$/.test(cpf)) return false;
+
+    let soma = 0, resto;
+    for (let i = 1; i <= 9; i++) soma += parseInt(cpf.substring(i - 1, i)) * (11 - i);
+    resto = (soma * 10) % 11;
+    if ((resto === 10) || (resto === 11)) resto = 0;
+    if (resto !== parseInt(cpf.substring(9, 10))) return false;
+
+    soma = 0;
+    for (let i = 1; i <= 10; i++) soma += parseInt(cpf.substring(i - 1, i)) * (12 - i);
+    resto = (soma * 10) % 11;
+    if ((resto === 10) || (resto === 11)) resto = 0;
+    return resto === parseInt(cpf.substring(10, 11));
+}
